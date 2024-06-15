@@ -1,59 +1,80 @@
 package com.example.bootnotification.notification
 
-import com.example.bootnotification.presentation.receiver.NotificationReceiver
 import android.app.AlarmManager
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import androidx.core.app.NotificationCompat
-import com.example.bootnotification.R
+import com.example.bootnotification.domain.model.BootEvent
+import com.example.bootnotification.presentation.receiver.NotificationReceiver
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
-object NotificationScheduler {
+class NotificationScheduler(private val context: Context) {
 
-    private const val CHANNEL_ID = "BootNotificationChannel"
-    private const val NOTIFICATION_ID = 1
-    private const val FIFTEEN_MINUTES_MS = 900000L
+    companion object {
+        const val NOTIFICATION_ID = 1001
+        private const val ALARM_REQUEST_CODE = 1002
+        private const val CHANNEL_ID = "Boot channel"
+    }
 
-    fun scheduleRepeatingNotification(context: Context) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(context, NotificationReceiver::class.java)
-        val pendingIntent = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT)
+    private val alarmManager: AlarmManager? =
+        context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
 
-        alarmManager.setRepeating(
+    private var dismissalCount = 0
+    private val maxDismissals = 5
+
+    fun scheduleNotification() {
+        val triggerTime = calculateNextAlarmTime(false)
+        val notificationContent = createNotificationContent()
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setContentTitle("Boot Notification")
+            .setContentText(notificationContent)
+            .build()
+
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            ALARM_REQUEST_CODE,
+            Intent(context, NotificationReceiver::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        alarmManager?.setExactAndAllowWhileIdle(
             AlarmManager.RTC_WAKEUP,
-            System.currentTimeMillis() + FIFTEEN_MINUTES_MS,
-            FIFTEEN_MINUTES_MS,
+            triggerTime.timeInMillis,
             pendingIntent
         )
     }
 
-    fun createNotification(context: Context, contentText: String) {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Boot Notification Channel",
-                NotificationManager.IMPORTANCE_DEFAULT
-            )
-            notificationManager.createNotificationChannel(channel)
-        }
-
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Boot Event")
-            .setContentText(contentText)
-            .setAutoCancel(true)
-            .build()
-
-        notificationManager.notify(NOTIFICATION_ID, notification)
+    // TODO: Change seconds
+    private fun calculateNextAlarmTime(withDismissalInterval: Boolean): Calendar {
+        val now = Calendar.getInstance()
+        now.add(Calendar.SECOND, if (withDismissalInterval)20 else 15)
+        return now
     }
 
-    fun cancelNotification(context: Context) {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.cancel(NOTIFICATION_ID)
+    private fun createNotificationContent(): String {
+        val bootEvent = getLatestBootEvent()
+        return when {
+            bootEvent == null -> "No boots detected"
+            else -> "The boot was detected = ${formatDate(bootEvent.timestamp)}"
+        }
+    }
+
+    private fun getLatestBootEvent(): BootEvent? {
+        // Implement logic to fetch the latest boot event from your repository
+        return null // Replace with actual implementation
+    }
+
+    private fun formatDate(timestamp: Date): String {
+        val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
+        return dateFormat.format(timestamp)
+    }
+
+    private fun calculateTimeDelta(): String {
+        return "1 hour ago" // Replace with actual calculation
     }
 }
