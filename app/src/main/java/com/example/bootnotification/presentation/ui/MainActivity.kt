@@ -1,14 +1,20 @@
 package com.example.bootnotification.presentation.ui
 
 import android.os.Bundle
-import android.widget.EditText
-import android.widget.TextView
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
-import com.example.bootnotification.R
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.bootnotification.databinding.ActivityMainBinding
+import com.example.bootnotification.domain.model.BootEvent
 import com.example.bootnotification.presentation.viewmodel.MainViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
@@ -18,17 +24,32 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        updateBootEventTextView()
-
-        // TODO: Setup UI to allow user to modify settings
+        lifecycleScope.launch(Dispatchers.Main) {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.bootEvents.collectLatest { bootEvents ->
+                    updateBootEventTextView(bootEvents)
+                }
+            }
+        }
     }
 
-    private fun updateBootEventTextView() {
-
+    private fun updateBootEventTextView(bootEvents: List<BootEvent>) {
+        if (bootEvents.isEmpty()) {
+            binding.bootEventTextView.text = "No boots detected"
+        } else {
+            val groupedEvents = bootEvents.groupBy {
+                SimpleDateFormat(
+                    "dd/MM/yyyy",
+                    Locale.US
+                ).format(it.timestamp)
+            }
+            val bootEventInfo =
+                groupedEvents.entries.joinToString("\n") { "${it.key} - ${it.value.size}" }
+            binding.bootEventTextView.text = bootEventInfo
+        }
     }
 }
